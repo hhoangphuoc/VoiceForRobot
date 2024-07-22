@@ -1,0 +1,6 @@
+numpy
+tensorflow
+librosa
+essentia
+frechet-audio-distance
+pretty_midi
