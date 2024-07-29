@@ -46,6 +46,14 @@ embedding_max_frequency = 1000.0
 widths = [32, 64, 96, 128]
 block_depth = 2
 
+# encoder-decoder - TODO: ADDING AS CONSTANT TO model.py
+dim = 64
+nn_padding = 1
+nn_stride = 2
+res_kernel_size = 3
+encoder_kernel_size = 4
+decoder_kernel_size = 7
+
 
 # optimization
 batch_size = 64

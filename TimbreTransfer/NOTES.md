@@ -18,3 +18,10 @@ The code for this method is available in the folder `tt-vae-gan`. The README fil
 > Traininng Process:
 >
 > - The training procedure for the `VAE-GAN model` and the `Vocoder` (WaveNet) has been trained seperately. Therefore we have different pre-trained model for these 2 parts. See `models/pre-trained/tt-vae-gan` folder.
+
+# Model Architecture for the Timbre Transfer using VAE-GAN for VoiceForRobot
+
+The model architecture for the Timbre Transfer using VAE-GAN is as follows:
+
+- Residual Block
+- Encoder - Multiple Encoder Blocks
