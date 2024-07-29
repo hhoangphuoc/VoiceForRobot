@@ -1,5 +1,7 @@
 numpy
 tensorflow
+tensorflow_hub
+tensorflow-addons
 librosa
 essentia
 frechet-audio-distance
