@@ -4,9 +4,16 @@ import math
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import tensorflow_hub as hub
-import params
+
 from tensorflow import keras
 from keras import layers
+
+from params.model_params import *
+from utils.model_utils import plot_to_image, denorm_tensor, kernel_init
+from modules.embeddings import sinusoidal_embedding
+from modules.blocks import ResidualBlock, DownBlock, UpBlock
+
+
 import io
 tf.config.list_physical_devices('GPU')
 # SoundStream Spectrogram Inverter (Stuff stolen from https://storage.googleapis.com/music-synthesis-with-spectrogram-diffusion/index.html) and https://tfhub.dev/google/soundstream/mel/decoder/music/1
@@ -15,160 +22,8 @@ module = hub.KerasLayer('https://tfhub.dev/google/soundstream/mel/decoder/music/
 do_norm_specs = True
 do_normalization = False
 # data
-dataset_repetitions = 5
-num_epochs = 1  # train for at least 50 epochs for good results
-# KID = Kernel Inception Distance, see related section
-kid_image_size = 75
-kid_diffusion_steps = 5
-plot_diffusion_steps = 20
-
-# sampling
-min_signal_rate = 0.02
-max_signal_rate = 0.95
 
 # architecture
-embedding_dims = 32
-embedding_max_frequency = 1000.0
-
-# optimization
-ema = 0.999
-#learning_rate = 1e-3
-weight_decay = 1e-4
-N_IMG_CHANNELS = 1 #3
-COND_IMG_CHANNELS=2
-
-
-######################
-# Helper functions   #
-######################
-
-def plot_to_image(figure):
-  """Converts the matplotlib plot specified by 'figure' to a PNG image and
-  returns it. The supplied figure is closed and inaccessible after this call."""
-  # Save the plot to a PNG in memory.
-  buf = io.BytesIO()
-  plt.savefig(buf, format='png')
-  # Closing the figure prevents it from being displayed directly inside
-  # the notebook.
-  plt.close(figure)
-  buf.seek(0)
-  # Convert PNG buffer to TF image
-  image = tf.image.decode_png(buf.getvalue(), channels=4)
-  # Add the batch dimension
-  image = tf.expand_dims(image, 0)
-  return image
-def denorm_tensor(audio, max_val=6,min_val=-12):
-    max_val = 6
-    min_val = -12
-    #return(audio - min_val)/(max_val-min_val)
-    #return(audio - min_val)/(max_val-min_val)
-    #return (((audio +1)/2)*max_val + min_val)
-    return (audio * (max_val-min_val))+min_val
-
-def kernel_init(scale):
-    scale = max(scale, 1e-10)
-    return keras.initializers.VarianceScaling(
-        scale, mode="fan_avg", distribution="uniform"
-    )
-
-#-----------------------------------------------------------#
-
-################################
-# Sub-components of the model  #
-################################
-
-def sinusoidal_embedding(x):
-    embedding_min_frequency = 1.0
-    frequencies = tf.exp(
-        tf.linspace(
-            tf.math.log(embedding_min_frequency),
-            tf.math.log(embedding_max_frequency),
-            embedding_dims // 2,
-        )
-    )
-    angular_speeds = 2.0 * math.pi * frequencies
-    embeddings = tf.concat(
-        [tf.sin(angular_speeds * x), tf.cos(angular_speeds * x)], axis=3
-    )
-    return embeddings
-
-def ResidualBlock(width):
-    def apply(x):
-        input_width = x.shape[3]
-        if input_width == width:
-            residual = x
-        else:
-            residual = layers.Conv2D(width, kernel_size=1)(x)
-        x = layers.BatchNormalization(center=False, scale=False)(x)
-        x = layers.Conv2D(
-            width, kernel_size=3, padding="same", activation=keras.activations.swish
-        )(x)
-        x = layers.Conv2D(width, kernel_size=3, padding="same")(x)
-        x = layers.Add()([x, residual])
-        return x
-
-    return apply
-
-
-def DownBlock(width, block_depth):
-    def apply(x):
-        x, skips = x
-        for _ in range(block_depth):
-            x = ResidualBlock(width)(x)
-            skips.append(x)
-        x = layers.AveragePooling2D(pool_size=2)(x)
-        return x
-
-    return apply
-
-
-def UpBlock(width, block_depth):
-    def apply(x):
-        x, skips = x
-        x = layers.UpSampling2D(size=2, interpolation="bilinear")(x)
-        for _ in range(block_depth):
-            x = layers.Concatenate()([x, skips.pop()])
-            x = ResidualBlock(width)(x)
-        return x
-    return apply
-
-def get_network(mel_spec_size, widths, block_depth,has_attention):
-    norm_groups=8
-
-    noisy_images = keras.Input(shape=(mel_spec_size[0], mel_spec_size[1], COND_IMG_CHANNELS))
-    noise_variances = keras.Input(shape=(1, 1, 1))
-
-    e = layers.Lambda(sinusoidal_embedding)(noise_variances)
-    e = layers.UpSampling2D(size=mel_spec_size, interpolation="nearest")(e)
-
-    x = layers.Conv2D(widths[0], kernel_size=1)(noisy_images)
-    x = layers.Concatenate()([x, e])
-
-    skips = []
-    idx = 0
-    for width in widths[:-1]:
-        x = DownBlock(width, block_depth)([x, skips])
-        if has_attention[idx]:
-            x = AttentionBlock(width, groups=norm_groups)(x)
-        idx = idx +1
-
-    for _ in range(block_depth):
-        x = ResidualBlock(widths[-1])(x)
-    x = AttentionBlock(widths[-1], groups=norm_groups)(x)
-
-    idx = len(widths[:-1])-1
-    for width in reversed(widths[:-1]):
-        x = UpBlock(width, block_depth)([x, skips])
-        if has_attention[idx]:
-            x = AttentionBlock(width, groups=norm_groups)(x)
-        idx = idx -1
-
-    x = layers.Conv2D(N_IMG_CHANNELS, kernel_size=1, kernel_initializer="zeros")(x)
-
-    return keras.Model([noisy_images, noise_variances], x, name="residual_unet")
-
-#-----------------------------------------------------------#
-
 class AttentionBlock(layers.Layer):
     """Applies self-attention.
 
@@ -210,6 +65,46 @@ class AttentionBlock(layers.Layer):
         return inputs + proj
 
 #-----------------------------------------------------------#
+# CONSTRUCTION OF U-NET MODEL
+#-----------------------------------------------------------#
+def get_network(mel_spec_size, widths, block_depth,has_attention):
+    norm_groups=8
+
+    noisy_images = keras.Input(shape=(mel_spec_size[0], mel_spec_size[1], COND_IMG_CHANNELS)) #The conditioning difussion noise image
+    noise_variances = keras.Input(shape=(1, 1, 1))
+
+    e = layers.Lambda(sinusoidal_embedding)(noise_variances)
+    e = layers.UpSampling2D(size=mel_spec_size, interpolation="nearest")(e)
+
+    x = layers.Conv2D(widths[0], kernel_size=1)(noisy_images)
+    x = layers.Concatenate()([x, e])
+
+    skips = []
+    idx = 0
+    for width in widths[:-1]:
+        x = DownBlock(width, block_depth)([x, skips])
+        if has_attention[idx]:
+            x = AttentionBlock(width, groups=norm_groups)(x)
+        idx = idx +1
+
+    for _ in range(block_depth):
+        x = ResidualBlock(widths[-1])(x)
+    x = AttentionBlock(widths[-1], groups=norm_groups)(x)
+
+    idx = len(widths[:-1])-1
+    for width in reversed(widths[:-1]):
+        x = UpBlock(width, block_depth)([x, skips])
+        if has_attention[idx]:
+            x = AttentionBlock(width, groups=norm_groups)(x)
+        idx = idx -1
+
+    x = layers.Conv2D(N_IMG_CHANNELS, kernel_size=1, kernel_initializer="zeros")(x)
+
+    return keras.Model([noisy_images, noise_variances], x, name="residual_unet")
+
+#-----------------------------------------------------------#
+
+
 
 ##############################
 # Diffusion Model Structure  #
@@ -247,8 +142,8 @@ class DiffusionModel(keras.Model):
 
     def diffusion_schedule(self, diffusion_times):
         # diffusion times -> angles
-        start_angle = tf.acos(max_signal_rate)
-        end_angle = tf.acos(min_signal_rate)
+        start_angle = tf.acos(MAX_SIGNAL_RATE)
+        end_angle = tf.acos(MIN_SIGNAL_RATE)
 
         diffusion_angles = start_angle + diffusion_times * (end_angle - start_angle)
 
@@ -364,7 +259,7 @@ class DiffusionModel(keras.Model):
 
         # track the exponential moving averages of weights
         for weight, ema_weight in zip(self.network.weights, self.ema_network.weights):
-            ema_weight.assign(ema * ema_weight + (1 - ema) * weight)
+            ema_weight.assign(EMA * ema_weight + (1 - EMA) * weight)
 
         return {m.name: m.result() for m in self.metrics[:-1]}
 
@@ -412,7 +307,7 @@ class DiffusionModel(keras.Model):
             # plot random generated images for visual evaluation of generation quality
             generated_images = self.generate(cond_images,
                 num_images=num_rows * num_cols,
-                diffusion_steps=plot_diffusion_steps,
+                diffusion_steps=PLOT_DIFFUSSION_STEPS,
             )
 
             spec_figures= plt.figure(figsize=(num_cols * 2.0, num_rows * 2.0))

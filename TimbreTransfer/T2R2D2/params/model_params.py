@@ -30,43 +30,46 @@ MEL_BASIS = tf.signal.linear_to_mel_weight_matrix(
 # Diffusion Model Config --------------------
 
 # data
-dataset_repetitions = 5
+DATASET_REPETITIONS = 5
 # num_epochs = 1  # train for at least 50 epochs for good results
-num_epochs = 50
-mel_spec_size = (128, 128)
+NUM_EPOCHS = 50
+MEL_SPEC_SIZE = (128, 128)
 
 # KID = Kernel Inception Distance, see related section
-kid_image_size = 75
-kid_diffusion_steps = 10
+KID_IMG_SIZE = 75
+KID_DIFFUSION_STEPS = 10
+PLOT_DIFFUSSION_STEPS = 20
 plot_diffusion_steps = 20
 # sampling
-min_signal_rate = 0.02
-max_signal_rate = 0.95
+MIN_SIGNAL_RATE = 0.02
+MAX_SIGNAL_RATE = 0.95
 
 # Model Architecture
-embedding_dims = 32
-embedding_max_frequency = 1000.0
-widths = [32, 64, 96, 128]
-block_depth = 2
-
+EMBEDDINGS_DIMS = 32
+EMBEDDINGS_MAX_FREQ = 1000.0
+EMBEDDINGS_WIDTHS = [32, 64, 96, 128]
+BLOCK_DEPTH = 2
 
 # optimization
-batch_size = 64
-ema = 0.999
-learning_rate =  2e-5
-weight_decay = 1e-4
+BATCH_SIZE = 64
+EMA = 0.999
+LEARNING_RATE =  2e-5
+WEIGHT_DECAY = 1e-4
 
-widths = [64, 128, 256, 512]
-has_attention = [False, False, True, True]
-block_depth = 4
-batch_size = 16
+# EMBEDDINGS_WIDTHS = [64, 128, 256, 512]
+# HAS_ATTENTION = [False, False, True, True] # specified which block position has the attention layer
+# BLOCK_DEPTH = 4
+# BATCH_SIZE = 16
 
-duration_sample = 40960 #*2 if 256
-duration_track = 480000
+DURATION_SAMPLE = 40960 #*2 if 256
+DURATION_TRACK = 480000
 
 # New
 #widths = [32,  64, 96,  128]
 #block_depth = 2
+
+N_IMG_CHANNELS = 1 #3 Numbers of channels in the image
+COND_IMG_CHANNELS=2 # Number of channels in the conditioning image
 
 # -----------------------------------
 
