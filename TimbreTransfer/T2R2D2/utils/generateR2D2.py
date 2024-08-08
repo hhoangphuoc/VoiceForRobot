@@ -1,126 +1,52 @@
-# import pd
-# import random
-# import time
-# import sounddevice as sd
-# import numpy as np
+import numpy as np
+import scipy.io.wavfile as wavfile
+import numpy as np
+import scipy.signal as signal
+from sounddesign import random_line_slide, fm_synthesis, apply_low_pass_filter, apply_distortion, apply_delay, apply_reverb
+#------------------------------------------------------------
 
-# # Connect to PureData
-# pd = pd.Pd()
+# MANUAL IMPLEMENTATION 
+# The implementation based on the guideline of creating R2D2 sound in Design Sound book by Andy Farnell
+# The implementation is based on the following steps:
+# 1. Random Line Slider with Noise
+# 2. FM Synthesis
+# 3. Apply Effects (if needed) - Low Pass Filter, Reverb, Distortion, etc.
+# 3. Complete Patch
+# 6. Write to WAV file
 
-# # PureData patch parameters
-# frequency_address = "/frequency"
-# amplitude_address = "/amplitude"
-# filter_cutoff_address = "/filter_cutoff"
-# envelope_attack_address = "/envelope_attack"
-# envelope_decay_address = "/envelope_decay"
-# envelope_sustain_address = "/envelope_sustain"
-# envelope_release_address = "/envelope_release"
-# # ... other parameters
+def generate_r2d2_sound(length=3, sample_rate=16000, amplitude_scale=0.5, cutoff_frequency=5000):
+    """Generates an R2-D2-like sound using Python.
 
-# # def generate_random_parameters(sound_type):
-# #     parameters = {}
+    Args:
+        length (float, optional): Length of the audio in seconds. Defaults to 5.
 
-# #     # ... (previous code for generating random parameters)
+    Returns:
+        numpy.ndarray: The generated audio signal.
+    """
+    t = np.linspace(0, length, int(length * sample_rate), False)
+
+    # Apply Random Line Slider
+    carrier_freq = random_line_slide(length=length, sample_rate=sample_rate)  # adjusted to influence the overall pitch of the sound
+    modulation_index = random_line_slide(length=length, sample_rate=sample_rate)
+    modulator_freq = random_line_slide(length=length, sample_rate=sample_rate)
+
+    # add random line slide to patch amplitude
+    amplitude = random_line_slide(length, sample_rate) * amplitude_scale  # Scale amplitude
+
+    # Apply FM synthesis
+    audio = fm_synthesis(carrier_freq, modulation_index, modulator_freq, length, sample_rate)
+
+    # Apply filtering or other effects
+    # audio = low_pass_filter(audio, cutoff_frequency)
+
+    # Normalize and convert to integer
+    audio /= np.max(np.abs(audio))
+    audio = np.int16(audio * 32767)
+
+    return audio
 
 
-# #     return parameters
-# def generate_random_parameters(sound_type):
-#     parameters = {}
-    
-#     if sound_type == "vocalization":
-#         parameters["frequency"] = random.uniform(1000, 5000)
-#         parameters["amplitude"] = random.uniform(0.3, 0.7)
-#         parameters["filter_cutoff"] = random.uniform(2000, 8000)
-#         parameters["envelope_attack"] = random.uniform(0.01, 0.05)
-#         parameters["envelope_decay"] = random.uniform(0.05, 0.2)
-#         parameters["envelope_sustain"] = random.uniform(0.3, 0.7)
-#         parameters["envelope_release"] = random.uniform(0.2, 0.5)
-#     elif sound_type == "mechanical":
-#         frequency = random.uniform(100, 500)
-#         parameters["amplitude"] = random.uniform(0.2, 0.5)
-#         parameters["filter_cutoff"] = random.uniform(500, 2000)
-#         parameters["envelope_attack"] = random.uniform(0.001, 0.02)
-#         parameters["envelope_decay"] = random.uniform(0.02, 0.1)
-#         parameters["envelope_sustain"] = random.uniform(0.1, 0.3)
-#         parameters["envelope_release"] = random.uniform(0.1, 0.3)
-#     elif sound_type == "whistle":
-#         parameters["frequency"] = np.random.normal(3000, 500)  # Gaussian distribution centered at 3000 Hz
-#         parameters["amplitude"] = np.random.uniform(0.5, 0.8)
-#         parameters["filter_cutoff"] = np.random.uniform(3000, 10000)
-#         parameters["envelope_attack"] = np.random.uniform(0.01, 0.03)
-#         parameters["envelope_decay"] = np.random.uniform(0.05, 0.1)
-#         parameters["envelope_sustain"] = np.random.uniform(0.2, 0.4)
-#         parameters["envelope_release"] = np.random.uniform(0.1, 0.2)
-#     elif sound_type == "beep":
-#         parameters["frequency"] = np.random.uniform(1000, 2000)
-#         parameters["amplitude"] = np.random.uniform(0.8, 1.0)
-#         parameters["filter_cutoff"] = np.random.uniform(2000, 5000)
-#         parameters["envelope_attack"] = np.random.uniform(0.001, 0.01)
-#         parameters["envelope_decay"] = np.random.uniform(0.01, 0.03)
-#         parameters["envelope_sustain"] = 0.0  # Short sustain for a sharp beep
-#         parameters["envelope_release"] = np.random.uniform(0.05, 0.1)
-#     # elif sound_type == "motor":
-#     #     parameters["frequency"] = np.random.uniform(100, 300)
-#     #     parameters["amplitude"] = np.random.uniform(0.2, 0.4)
-#     #     parameters["filter_cutoff"] = np.random.uniform(500, 1500)
-#     #     parameters["envelope_attack"] = 0.0  # Immediate start
-#     #     parameters["envelope_decay"] = np.random.uniform(0.1, 0.3)
-#     #     parameters["envelope_sustain"] = 1.0  # Continuous sound
-#     #     parameters["envelope_release"] = np.random.uniform(0.2, 0.5)
-#     # elif sound_type == "hydraulic":
-#     #     parameters["frequency"] = np.random.uniform(50, 200)
-#     #     parameters["amplitude"] = np.random.uniform(0.3, 0.6)
-#     #     parameters["filter_cutoff"] = np.random.uniform(300, 1000)
-#     #     parameters["envelope_attack"] = np.random.uniform(0.01, 0.05)
-#     #     parameters["envelope_decay"] = np.random.uniform(0.1, 0.3)
-#     #     parameters["envelope_sustain"] = 0.5  # Medium sustain
-#     #     parameters["envelope_release"] = np.random.uniform(0.2, 0.4)
-#     elif sound_type == "alarm":
-#         parameters["frequency"] = np.random.uniform(1000, 3000)
-#         parameters["amplitude"] = np.random.uniform(0.7, 1.0)
-#         parameters["filter_cutoff"] = np.random.uniform(2000, 5000)
-#         parameters["envelope_attack"] = 0.0  # Immediate start
-#         parameters["envelope_decay"] = np.random.uniform(0.01, 0.03)
-#         parameters["envelope_sustain"] = 1.0  # Continuous sound with variations
-#         parameters["envelope_release"] = np.random.uniform(0.1, 0.2)
+# Generate R2-D2 sound
+audio = generate_r2d2_sound()
+wavfile.write("r2d2_sound.wav", 44100, audio)
 
-#     else:
-#         raise ValueError("Invalid sound type")
-
-#     return parameters
-
-# def generate_r2d2_sound(sound_type, length):
-#     parameters = generate_random_parameters(sound_type)
-
-#     # Send parameters to PureData
-#     pd.send_float(frequency_address, parameters["frequency"])
-#     pd.send_float(amplitude_address, parameters["amplitude"])
-#     pd.send_float(filter_cutoff_address, parameters["filter_cutoff"])
-#     pd.send_float(envelope_attack_address, parameters["envelope_attack"])
-#     pd.send_float(envelope_decay_address, parameters["envelope_decay"])
-#     pd.send_float(envelope_sustain_address, parameters["envelope_sustain"])
-#     pd.send_float(envelope_release_address, parameters["envelope_release"])
-#     # ... send other parameters
-
-#     # Trigger sound generation
-#     pd.send_bang("/trigger_sound")
-
-#     # Record audio (adjust parameters as needed)
-#     myrecording = sd.rec(int(length * 44100), samplerate=44100, channels=2)
-#     sd.wait()
-#     soundfile.write(f"r2d2_sound_{random.randint(1, 10000)}_{sound_type}.wav", myrecording, 44100, 'float32')
-
-# def main():
-#     total_time = 5 * 60 * 60  # 5 hours in seconds
-#     average_sound_length = 90  # Adjust average sound length
-#     num_sounds = total_time / average_sound_length
-
-#     sound_types = ["vocalization", "mechanical", "whistle", "beep", "alarm"]  # Add more types
-
-#     for _ in range(int(num_sounds)):
-#         sound_type = random.choice(sound_types)
-#         length = random.uniform(60, 120)
-#         generate_r2d2_sound(sound_type, length)
-
-# if __name__ == "__main__":
-#     main()

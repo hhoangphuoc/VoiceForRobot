@@ -2,53 +2,127 @@ import numpy as np
 import scipy.io.wavfile as wavfile
 import random
 import scipy.signal as signal
+import librosa
 
-def generate_random_parameters(sound_type):
-    parameters = {}
-    
-    if sound_type == "vocalization":
-        parameters["frequency"] = random.uniform(1000, 5000)
-        parameters["amplitude"] = random.uniform(0.3, 0.7)
-        parameters["filter_cutoff"] = random.uniform(2000, 8000)
-        parameters["envelope_attack"] = random.uniform(0.01, 0.05)
-        parameters["envelope_decay"] = random.uniform(0.05, 0.2)
-        parameters["envelope_sustain"] = random.uniform(0.3, 0.7)
-        parameters["envelope_release"] = random.uniform(0.2, 0.5)
-    elif sound_type == "mechanical":
-        frequency = random.uniform(100, 500)
-        parameters["amplitude"] = random.uniform(0.2, 0.5)
-        parameters["filter_cutoff"] = random.uniform(500, 2000)
-        parameters["envelope_attack"] = random.uniform(0.001, 0.02)
-        parameters["envelope_decay"] = random.uniform(0.02, 0.1)
-        parameters["envelope_sustain"] = random.uniform(0.1, 0.3)
-        parameters["envelope_release"] = random.uniform(0.1, 0.3)
-    elif sound_type == "whistle":
-        parameters["frequency"] = np.random.normal(3000, 500)  # Gaussian distribution centered at 3000 Hz
-        parameters["amplitude"] = np.random.uniform(0.5, 0.8)
-        parameters["filter_cutoff"] = np.random.uniform(3000, 10000)
-        parameters["envelope_attack"] = np.random.uniform(0.01, 0.03)
-        parameters["envelope_decay"] = np.random.uniform(0.05, 0.1)
-        parameters["envelope_sustain"] = np.random.uniform(0.2, 0.4)
-        parameters["envelope_release"] = np.random.uniform(0.1, 0.2)
-    elif sound_type == "beep":
-        parameters["frequency"] = np.random.uniform(1000, 2000)
-        parameters["amplitude"] = np.random.uniform(0.8, 1.0)
-        parameters["filter_cutoff"] = np.random.uniform(2000, 5000)
-        parameters["envelope_attack"] = np.random.uniform(0.001, 0.01)
-        parameters["envelope_decay"] = np.random.uniform(0.01, 0.03)
-        parameters["envelope_sustain"] = 0.0  # Short sustain for a sharp beep
-        parameters["envelope_release"] = np.random.uniform(0.05, 0.1)
+def random_line_slide(length, sample_rate=16000):
+    """Generates a random line slider with noise.
 
-    else:
-        raise ValueError("Invalid sound type")
+    Args:
+        length (float): Length of the slider in seconds.
 
-    return parameters
+    Returns:
+        numpy.ndarray: The generated slider.
+    """
+    t = np.linspace(0, length, int(length * sample_rate), False)
+    noise = np.random.randn(len(t)) * 0.1  # Adjust noise level
 
-def apply_filter(audio, sample_rate, cutoff):
-    nyquist_freq = sample_rate / 2
-    normal_cutoff = cutoff / nyquist_freq
-    b, a = signal.butter(4, normal_cutoff, btype='low', fs=sample_rate)
-    return signal.filtfilt(b, a, audio) #return filtered audio
+    # Generate random line
+    line = np.random.rand(2) * 2 - 1
+    line = np.interp(t, [0, length], line)
+
+    # Add noise
+    slider = line + noise
+
+    return slider
+
+def fm_synthesis(amplitude, carrier_freq, modulation_index, modulator_freq, length, sample_rate=16000):
+    """Generates an FM synthesis sound.
+
+    Args:
+        carrier_freq (numpy.ndarray): The carrier frequency slider.
+        modulation_index (numpy.ndarray): The modulation index slider.
+        modulator_freq (numpy.ndarray): The modulator frequency slider.
+        length (float): Length of the audio in seconds.
+
+    Returns:
+        numpy.ndarray: The generated audio signal.
+    """
+    t = np.linspace(0, length, int(length * sample_rate), False)
+
+    carrier = amplitude * np.sin(2 * np.pi * carrier_freq * t)
+    modulator = np.sin(2 * np.pi * modulator_freq * t)
+    # audio = np.sin(2 * np.pi * (carrier_freq + modulation_index * modulator) * t)
+    modulated_signal = carrier * np.exp(1j * modulation_index * modulator_freq)
+    audio = np.real(modulated_signal)
+    return audio
+#------------------------------------------------------------
+
+def apply_low_pass_filter(audio, sample_rate=16000, cutoff_frequency=5000):
+    """Applies a low-pass filter to the audio signal.
+
+    Args:
+        audio (numpy.ndarray): The input audio signal.
+        cutoff_frequency (float): The cutoff frequency of the filter.
+        sample_rate (int, optional): The sample rate of the audio signal. Defaults to 44100.
+
+    Returns:
+        numpy.ndarray: The filtered audio signal.
+    """
+    b, a = signal.butter(4, cutoff_frequency / (sample_rate / 2), btype="low", fs=sample_rate)
+    filtered_audio = signal.filtfilt(b, a, audio)
+    return filtered_audio
+
+def apply_distortion(audio, gain=1.0):
+    """Apply distortion to the audio signal.
+
+    Args:
+        audio (numpy.ndarray): The input audio signal.
+        gain (float, optional): The gain of the distortion effect. Defaults to 1.0.
+
+    Returns:
+        numpy.ndarray: The distorted audio signal.
+    """
+    distorted_audio = np.clip(audio * gain, -1, 1)
+    return distorted_audio
+
+def apply_reverb(audio, sample_rate=16000, decay_time=1.0, reverb_time=1.0, room_size=0.5, damping=0.5, wet_level=0.5, dry_level=0.5):
+    """Apply reverb to the audio signal.
+
+    Args:
+        audio (numpy.ndarray): The input audio signal.
+        sample_rate (int, optional): The sample rate of the audio signal. Defaults to 44100.
+        room_size (float, optional): The size of the virtual room. Defaults to 0.5.
+        damping (float, optional): The damping factor. Defaults to 0.5.
+        wet_level (float, optional): The wet level of the reverb effect. Defaults to 0.5.
+        dry_level (float, optional): The dry level of the reverb effect. Defaults to 0.5.
+
+    Returns:
+        numpy.ndarray: The reverberated audio signal.
+    """
+    audio = np.array(audio, dtype=np.float32)
+    reverb = np.zeros_like(audio)
+    delay = int(reverb_time * sample_rate)
+
+    # Generate reverb
+    for i in range(delay, len(audio)):
+        reverb[i] = audio[i] + decay_time * audio[i - delay]
+
+    # Mix dry and wet signals
+    output = (1 - wet_level) * audio + wet_level * reverb
+    return output
+
+def apply_delay(audio, sample_rate=16000, delay_time=0.5, feedback=0.5):
+    """Apply delay to the audio signal.
+
+    Args:
+        audio (numpy.ndarray): The input audio signal.
+        sample_rate (int, optional): The sample rate of the audio signal. Defaults to 44100.
+        delay_time (float, optional): The delay time in seconds. Defaults to 0.5.
+        feedback (float, optional): The feedback gain. Defaults to 0.5.
+
+    Returns:
+        numpy.ndarray: The delayed audio signal.
+    """
+    audio = np.array(audio, dtype=np.float32)
+    delay_samples = int(delay_time * sample_rate)
+    delayed_audio = np.zeros_like(audio)
+
+    # Apply delay
+    for i in range(delay_samples, len(audio)):
+        delayed_audio[i] = audio[i] + feedback * audio[i - delay_samples]
+
+    return delayed_audio
+
 
 def apply_envelope(audio, length, sample_rate, attack, decay, sustain, release):
     envelope_length = attack + decay + sustain * length + release
@@ -67,40 +141,4 @@ def apply_envelope(audio, length, sample_rate, attack, decay, sustain, release):
     audio *= envelope[:len(audio)]
 
     return audio
-
-def generate_r2d2_sound(sound_type, length):
-    sample_rate = 44100
-    t = np.linspace(0, length, int(length * sample_rate), False)
-
-    parameters = generate_random_parameters(sound_type)
-
-    # Generate basic waveform (e.g., sine)
-    frequency = parameters["frequency"]
-    amplitude = parameters["amplitude"]
-    audio = amplitude * np.sin(2 * np.pi * frequency * t)
-
-    # Apply filtering (example)
-    filter_cutoff = parameters["filter_cutoff"]
-    # Implement filtering using scipy
-    audio = apply_filter(audio, sample_rate, filter_cutoff)
-
-    # Apply envelope (example)
-    attack = parameters["envelope_attack"]
-    decay = parameters["envelope_decay"]
-    sustain = parameters["envelope_sustain"]
-    release = parameters["envelope_release"]
-    # Implement envelope using numpy
-    audio = apply_envelope(audio, length, sample_rate, attack, decay, sustain, release)
-
-    # Apply other sound design techniques (e.g., distortion, modulation)
-    # ...
-
-    # Normalize audio
-    audio /= np.max(np.abs(audio))
-
-    # Convert to integer format
-    audio_int = np.int16(audio * 32767)
-
-    # Write to WAV file
-    wavfile.write(f"r2d2_sound_{sound_type}_{random.randint(1, 10000)}.wav", sample_rate, audio_int)
 
