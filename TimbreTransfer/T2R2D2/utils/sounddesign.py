@@ -45,7 +45,32 @@ def fm_synthesis(amplitude, carrier_freq, modulation_index, modulator_freq, leng
     modulated_signal = carrier * np.exp(1j * modulation_index * modulator_freq)
     audio = np.real(modulated_signal)
     return audio
+
+def generate_beep(length, sample_rate=16000, beep_frequency=2000, beep_amplitude=2.5):
+    """Generates a beep sound.
+
+    Args:
+    frequency: The frequency of the beep.
+    duration: The duration of the beep in seconds.
+    sample_rate: The sample rate of the audio.
+
+    Returns:
+    The generated beep sound.
+    """
+
+    t = np.linspace(0, length, int(length * sample_rate), False)
+    beep = beep_amplitude * np.sin(2 * np.pi * beep_frequency * t)
+    envelope = np.concatenate([
+        np.linspace(0, 1, int(length * sample_rate * 0.1)),  # Attack
+        np.linspace(1, 0, int(length * sample_rate * 0.1))  # Decay
+    ])
+    envelope = np.pad(envelope, (0, len(beep) - len(envelope)), mode="constant")
+    beep *= envelope
+    return beep
 #------------------------------------------------------------
+
+
+
 
 def apply_low_pass_filter(audio, sample_rate=16000, cutoff_frequency=5000):
     """Applies a low-pass filter to the audio signal.
