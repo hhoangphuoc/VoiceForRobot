@@ -1,4 +1,7 @@
 numpy
+matplotlib
+keras
+scipy
 tensorflow
 tensorflow_hub
 tensorflow-addons
@@ -6,3 +9,5 @@ librosa
 essentia
 frechet-audio-distance
 pretty_midi
+tqdm
+transformers
