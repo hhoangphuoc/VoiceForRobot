@@ -11,12 +11,12 @@ from keras import layers
 from params.model_params import *
 from utils.model_utils import plot_to_image, denorm_tensor, kernel_init
 from modules.embeddings import sinusoidal_embedding
-from modules.blocks import ResidualBlock, DownBlock, UpBlock
+from modules.blocks import ResidualBlock, DownBlock, UpBlock, AttentionBlock
 
 
 import io
 tf.config.list_physical_devices('GPU')
-# SoundStream Spectrogram Inverter (Stuff stolen from https://storage.googleapis.com/music-synthesis-with-spectrogram-diffusion/index.html) and https://tfhub.dev/google/soundstream/mel/decoder/music/1
+# # SoundStream Spectrogram Inverter (Stuff stolen from https://storage.googleapis.com/music-synthesis-with-spectrogram-diffusion/index.html) and https://tfhub.dev/google/soundstream/mel/decoder/music/1
 module = hub.KerasLayer('https://tfhub.dev/google/soundstream/mel/decoder/music/1')
 
 do_norm_specs = True
@@ -24,53 +24,13 @@ do_normalization = False
 # data
 
 # architecture
-class AttentionBlock(layers.Layer):
-    """Applies self-attention.
-
-    Args:
-        units: Number of units in the dense layers
-        groups: Number of groups to be used for GroupNormalization layer
-    """
-
-    def __init__(self, units, groups=8, **kwargs):
-        self.units = units
-        self.groups = groups
-        super().__init__(**kwargs)
-
-        self.norm = layers.GroupNormalization(groups=groups)
-        self.query = layers.Dense(units, kernel_initializer=kernel_init(1.0))
-        self.key = layers.Dense(units, kernel_initializer=kernel_init(1.0))
-        self.value = layers.Dense(units, kernel_initializer=kernel_init(1.0))
-        self.proj = layers.Dense(units, kernel_initializer=kernel_init(0.0))
-
-    def call(self, inputs):
-        batch_size = tf.shape(inputs)[0]
-        height = tf.shape(inputs)[1]
-        width = tf.shape(inputs)[2]
-        scale = tf.cast(self.units, tf.float32) ** (-0.5)
-
-        inputs = self.norm(inputs)
-        q = self.query(inputs)
-        k = self.key(inputs)
-        v = self.value(inputs)
-
-        attn_score = tf.einsum("bhwc, bHWc->bhwHW", q, k) * scale
-        attn_score = tf.reshape(attn_score, [batch_size, height, width, height * width])
-
-        attn_score = tf.nn.softmax(attn_score, -1)
-        attn_score = tf.reshape(attn_score, [batch_size, height, width, height, width])
-
-        proj = tf.einsum("bhwHW,bHWc->bhwc", attn_score, v)
-        proj = self.proj(proj)
-        return inputs + proj
-
 #-----------------------------------------------------------#
 # CONSTRUCTION OF U-NET MODEL
 #-----------------------------------------------------------#
 def get_network(mel_spec_size, widths, block_depth,has_attention):
     norm_groups=8
 
-    noisy_images = keras.Input(shape=(mel_spec_size[0], mel_spec_size[1], COND_IMG_CHANNELS)) #The conditioning difussion noise image
+    noisy_images = keras.Input(shape=(mel_spec_size[0], mel_spec_size[1], COND_IMG_CHANNELS)) #The conditioning difussion noise image channels is 2
     noise_variances = keras.Input(shape=(1, 1, 1))
 
     e = layers.Lambda(sinusoidal_embedding)(noise_variances)
@@ -79,8 +39,11 @@ def get_network(mel_spec_size, widths, block_depth,has_attention):
     x = layers.Conv2D(widths[0], kernel_size=1)(noisy_images)
     x = layers.Concatenate()([x, e])
 
-    skips = []
+    skips = [] # skip connections for the U-Net (connecting the corresponding downsampling and upsampling block)
     idx = 0
+
+    # Downsampling paths of U-NET
+    # except the 512-channel layer
     for width in widths[:-1]:
         x = DownBlock(width, block_depth)([x, skips])
         if has_attention[idx]:
@@ -88,9 +51,12 @@ def get_network(mel_spec_size, widths, block_depth,has_attention):
         idx = idx +1
 
     for _ in range(block_depth):
-        x = ResidualBlock(widths[-1])(x)
-    x = AttentionBlock(widths[-1], groups=norm_groups)(x)
+        x = ResidualBlock(widths[-1])(x) #added residual block for each block downsampled
+    
+    # Add attention block to the 512-channel layer
+    x = AttentionBlock(widths[-1], groups=norm_groups)(x) #widths[-1] = 512
 
+    # Upsampling paths of U-NET (except the 512-channel layer)
     idx = len(widths[:-1])-1
     for width in reversed(widths[:-1]):
         x = UpBlock(width, block_depth)([x, skips])
@@ -103,8 +69,6 @@ def get_network(mel_spec_size, widths, block_depth,has_attention):
     return keras.Model([noisy_images, noise_variances], x, name="residual_unet")
 
 #-----------------------------------------------------------#
-
-
 
 ##############################
 # Diffusion Model Structure  #
@@ -342,9 +306,9 @@ class DiffusionModel(keras.Model):
 
 
             if do_norm_specs:
-                est_spec = denorm_tensor(est_spec)
-                cond_spec = denorm_tensor(cond_spec)
-                gt_spxec = denorm_tensor(gt_spec)
+                est_spec = denorm_tensor(est_spec) # target timbre spectrogram
+                cond_spec = denorm_tensor(cond_spec) # conditioning timbre spectrogram
+                gt_spxec = denorm_tensor(gt_spec) # ground truth timbre spectrogram
             audio_est = tf.cast(tf.expand_dims(module(est_spec),axis=-1),dtype=tf.float32)
             cond_audio = tf.cast(tf.expand_dims(module(cond_spec),axis=-1),dtype=tf.float32)
             gt_audio = tf.cast(tf.expand_dims(module(gt_spec),axis=-1),dtype=tf.float32)
