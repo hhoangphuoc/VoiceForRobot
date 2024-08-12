@@ -124,7 +124,7 @@ class Audio2Mel(tf.keras.Model):
           lower_edge_hertz=mel_fmin,
           upper_edge_hertz=mel_fmax) #configuration for BASIC mel spectrogram
 
-  def calculate_spectrogram(self, audio, training=False):
+  def call(self, audio, training=False):
     """Computes the mel spectrogram of the input audio samples.
 
     Coefficients are clipped before log compression to avoid log(0) and large

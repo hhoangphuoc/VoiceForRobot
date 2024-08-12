@@ -1,3 +1,5 @@
+# The implementation of sinusoidal_embedding
+# sinusoidal_embedding is meant to be used in the DDIM model
 def sinusoidal_embedding(x):
     embedding_min_frequency = 1.0
     frequencies = tf.exp(
