@@ -1,11 +1,6 @@
 import tensorflow as tf
 
-# IMAGE Config --------------------
-
-MEL_ORIGINAL_SIZE = (128, 512) # (height, width) of the original Mel-Spectrogram
-MEL_SPEC_SIZE = (128, 128) #size of Mel-Spectrogram that will be used as input to the model
-
-N_IMG_CHANNELS = 1 #3 Numbers of channels in the target timbre image
+TGT_IMG_CHANNELS = 1 #3 Numbers of channels in the target timbre image
 COND_IMG_CHANNELS=2 # Number of channels in the condition timbre image
 
 EMBEDDINGS_DIMS = 32
