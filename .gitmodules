@@ -1,0 +1,3 @@
+[submodule "TimbreTransfer/R2D2SoundGeneration"]
+	path = TimbreTransfer/R2D2SoundGeneration
+	url = https://github.com/hhoangphuoc/R2D2SoundGeneration.git
