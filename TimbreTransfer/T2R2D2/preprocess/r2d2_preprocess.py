@@ -6,7 +6,7 @@ import os
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--datasource", type=str, default='../../data/r2d2/', help="data source of R2D2 dataset")
-parser.add_argument("--outdir", type=str, default='../T2R2D2/datasets/', help="output directory storing the processed data")
+parser.add_argument("--outdir", type=str, default='../T2R2D2/data_specs/', help="output directory storing the processed data")
 args = parser.parse_args()
 print(args)
 

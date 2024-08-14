@@ -13,7 +13,7 @@ import tensorflow_hub as hub
 import librosa
 import params.audio_params as params
 
-module = hub.KerasLayer('https://www.kaggle.com/models/google/soundstream/TensorFlow2/mel-decoder-music/1')
+# module = hub.KerasLayer('https://www.kaggle.com/models/google/soundstream/TensorFlow2/mel-decoder-music/1')
 
 MEL_BASIS = tf.signal.linear_to_mel_weight_matrix(
     num_mel_bins=params.N_MEL_CHANNELS,

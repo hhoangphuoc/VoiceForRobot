@@ -15,10 +15,14 @@ from tqdm import tqdm
 import params.audio_params as aprs #parameters for audio processing
 import params.model_params as mprs #parameters for the model
 from utils.audio_utils import calculate_spectrogram, preprocess_dataset
-# from modules.wav2spec import Audio2Mel #class to convert audio to mel spectrogram
 import argparse
 
-def prepare_diff_data(tgt_dataset="../datasets/r2d2", cond_dataset="../datasets/vn", sr=aprs.SAMPLE_RATE, n_mel_channels=aprs.N_MEL_CHANNELS, specs_config=False):
+def convert_specs_to_tensor(specs):
+    specs = tf.convert_to_tensor(specs, dtype=tf.float32)
+    specs = tf.expand_dims(specs, axis=-1)
+    return specs
+
+def prepare_spectrograms(tgt_dataset="../datasets/r2d2", cond_dataset="../datasets/vn", sr=aprs.SAMPLE_RATE, n_mel_channels=aprs.N_MEL_CHANNELS, specs_config=False):
     """
     Prepare the dataset from the audio files to mel-spectrograms 
     and save them to the dataset folder
@@ -28,11 +32,14 @@ def prepare_diff_data(tgt_dataset="../datasets/r2d2", cond_dataset="../datasets/
     cond_specs = preprocess_dataset(cond_dataset, sr, n_mel_channels)
 
     # Convert to Tensorflow Tensors
-    tgt_spectrograms = tf.convert_to_tensor(tgt_specs, dtype=tf.float32)
-    tgt_spectrograms = tf.expand_dims(tgt_spectrograms, axis=-1)
+    tgt_specs = convert_specs_to_tensor(tgt_specs)
+    cond_specs = convert_specs_to_tensor(cond_specs)
 
-    cond_spectrograms = tf.convert_to_tensor(cond_specs, dtype=tf.float32)
-    cond_spectrograms = tf.expand_dims(cond_spectrograms, axis=-1)
+    # tgt_spectrograms = tf.convert_to_tensor(tgt_specs, dtype=tf.float32)
+    # tgt_spectrograms = tf.expand_dims(tgt_spectrograms, axis=-1)
+
+    # cond_spectrograms = tf.convert_to_tensor(cond_specs, dtype=tf.float32)
+    # cond_spectrograms = tf.expand_dims(cond_spectrograms, axis=-1)
 
     return tgt_spectrograms, cond_spectrograms #expected output shape (number of samples, 128, 128, 1)
 
@@ -46,7 +53,7 @@ def main():
     AND SAVE THEM TO THE DATASET FOLDER
     """
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_path', type=str, default='./datasets/' , help='Path to the datasource')
+    parser.add_argument('--data_path', type=str, default='./data_specs/' , help='Path to the datasource')
     parser.add_argument('--tgt_timbre', type=str, default='r2d2' , help='Name of Target timbre')
     parser.add_argument('--cond_timbre', type=str, default='vn' , help='Name of Conditioning timbre')
     parser.add_argument('--sr', type=int, default=aprs.SAMPLE_RATE , help='Sample rate')
@@ -64,7 +71,7 @@ def main():
 
     tgt_dataset = os.path.join(args.data_path, args.tgt_timbre)
     cond_dataset = os.path.join(args.data_path, args.cond_timbre)
-    tgt_specs, cond_specs = prepare_diff_data(tgt_dataset, cond_dataset, args.sr, args.n_mel_channels)
+    tgt_specs, cond_specs = prepare_spectrograms(tgt_dataset, cond_dataset, args.sr, args.n_mel_channels)
 
     # Save the dataset to the dataset folder
     np.save(os.path.join(args.data_path, args.tgt_timbre, 'tgt_specs.npy'), tgt_specs)
