@@ -1,4 +1,9 @@
-"""Partially taken code from https://github.com/keras-team/keras-io/blob/master/examples/generative/ddim.py"""
+"""Partially taken the DDIM model implementation from
+https://github.com/keras-team/keras-io/blob/master/examples/generative/ddim.py
+
+sinusoidal embedding and U-NET model architecture from
+https://github.com/lucacoma/DiffTransfer
+"""
 
 import math
 import matplotlib.pyplot as plt
@@ -10,6 +15,8 @@ from keras import layers
 
 from params.model_params import *
 from utils.model_utils import plot_to_image, denorm_tensor, kernel_init
+from utils.audio_utils import calculate_spectrogram
+from preprocess.dataset_prep import convert_specs_to_tensor
 from modules.embeddings import sinusoidal_embedding
 from modules.blocks import ResidualBlock, DownBlock, UpBlock, AttentionBlock
 
@@ -17,7 +24,7 @@ from modules.blocks import ResidualBlock, DownBlock, UpBlock, AttentionBlock
 import io
 tf.config.list_physical_devices('GPU')
 # # SoundStream Spectrogram Inverter (Stuff stolen from https://storage.googleapis.com/music-synthesis-with-spectrogram-diffusion/index.html) and https://tfhub.dev/google/soundstream/mel/decoder/music/1
-module = hub.KerasLayer('https://tfhub.dev/google/soundstream/mel/decoder/music/1')
+# module = hub.KerasLayer('https://tfhub.dev/google/soundstream/mel/decoder/music/1')
 
 do_norm_specs = True
 do_normalization = False
@@ -76,14 +83,14 @@ def get_network(mel_spec_size, widths, block_depth,has_attention):
 
 class DiffusionModel(keras.Model):
     def __init__(self, mel_spec_size, widths, block_depth, 
-    # val_data, 
+    val_data, 
     has_attention, logdir='logs',batch_size=64): # val_data is BAD and should be removed
         super().__init__()
         if do_normalization:
             self.normalizer = layers.Normalization()
         self.network = get_network(mel_spec_size, widths, block_depth,has_attention)
         self.ema_network = keras.models.clone_model(self.network)
-        # self.val_data = val_data
+        self.val_data = val_data
         self.mel_spec_size = mel_spec_size
         self.logdir=logdir
         self.summary_writer = tf.summary.create_file_writer(logdir)
@@ -286,8 +293,8 @@ class DiffusionModel(keras.Model):
 
             # Audio
             idx = tf.random.uniform((),0,(num_rows * num_cols),dtype=tf.int32)
+            tgt_spec =  tf.expand_dims(generated_images[idx,:,:,0],0)
             cond_spec = tf.expand_dims(cond_images[idx,:,:,0],0)
-            est_spec =  tf.expand_dims(generated_images[idx,:,:,0],0)
             gt_spec = tf.expand_dims(des_images[idx,:,:,0],0)
             comp_SPEC_FIG = plt.figure()
             plt.subplot(311),
@@ -306,13 +313,17 @@ class DiffusionModel(keras.Model):
 
 
             if do_norm_specs:
-                est_spec = denorm_tensor(est_spec) # target timbre spectrogram
+                tgt_spec = denorm_tensor(est_spec) # target timbre spectrogram
                 cond_spec = denorm_tensor(cond_spec) # conditioning timbre spectrogram
-                gt_spxec = denorm_tensor(gt_spec) # ground truth timbre spectrogram
-            audio_est = tf.cast(tf.expand_dims(module(est_spec),axis=-1),dtype=tf.float32)
-            cond_audio = tf.cast(tf.expand_dims(module(cond_spec),axis=-1),dtype=tf.float32)
-            gt_audio = tf.cast(tf.expand_dims(module(gt_spec),axis=-1),dtype=tf.float32)
+                gt_spec = denorm_tensor(gt_spec) # ground truth timbre spectrogram
 
+            # audio
+            # audio_est = tf.cast(tf.expand_dims(module(est_spec),axis=-1),dtype=tf.float32)
+            # cond_audio = tf.cast(tf.expand_dims(module(cond_spec),axis=-1),dtype=tf.float32)
+            # gt_audio = tf.cast(tf.expand_dims(module(gt_spec),axis=-1),dtype=tf.float32)
+            tgt_audio = tf.cast(tf.expand_dims(calculate_spectrogram(tgt_spec),axis=-1),dtype=tf.float32)
+            cond_audio = tf.cast(tf.expand_dims(calculate_spectrogram(cond_spec),axis=-1),dtype=tf.float32)
+            gt_audio = tf.cast(tf.expand_dims(calculate_spectrogram(gt_spec),axis=-1),dtype=tf.float32)
 
             with self.summary_writer.as_default():
                 # Write images to tensorboard

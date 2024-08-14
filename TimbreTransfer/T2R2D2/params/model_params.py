@@ -15,7 +15,8 @@ BLOCK_DEPTH = 4 # number of up/downsampling blocks
 WIDTHS = [64, 128, 256, 512] # number of filters in up/downsampling blocks
 HAS_ATTENTION = [False, False, True, True] # specified which block in U-NET added with the attention layer
 
-BATCH_SIZE = 16 #starting with 16, can be increased to 32 or 64 depending on the GPU memory
+# BATCH_SIZE = 16 #starting with 16, can be increased to 32 or 64 depending on the GPU memory
+BATCH_SIZE = 64 #starting with 16, can be increased to 32 or 64 depending on the GPU memory
 
 DURATION_SAMPLE = 40960 #*2 if 256
 
@@ -33,7 +34,10 @@ MAX_SIGNAL_RATE = 0.95
 # Training Config --------------------
 
 DATASET_REPETITIONS = 5
-NUM_EPOCHS = 5000 # train for at least 50 epochs for good results
+# NUM_EPOCHS = 5000 # train for at least 50 epochs for good results
+NUM_EPOCHS = 500
+NUM_EPOCHS_PER_CHECKPOINT = 100
+
 EMA = 0.999
 LEARNING_RATE =  2e-5
 WEIGHT_DECAY = 1e-4
