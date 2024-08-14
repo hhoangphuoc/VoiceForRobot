@@ -31,9 +31,9 @@ MAX_SIGNAL_RATE = 0.95
 # --------------------------------------
 
 # Training Config --------------------
+
 DATASET_REPETITIONS = 5
 NUM_EPOCHS = 5000 # train for at least 50 epochs for good results
-
 EMA = 0.999
 LEARNING_RATE =  2e-5
 WEIGHT_DECAY = 1e-4

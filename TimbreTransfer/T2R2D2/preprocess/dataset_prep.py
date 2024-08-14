@@ -7,59 +7,70 @@
 # The target timbre is the timbre that we want to convert the condition timbre to
 # The condition timbre is the timbre that we want to convert to the target timbre
 # The two numpy arrays have the shape (number of samples, 128, 128, 1)
-
 import tensorflow as tf
 import numpy as np
 import os
 import tensorflow_io as tfio
 from tqdm import tqdm
-
-import params.audio_params as params #parameters for audio processing
-import params.model_params as model_params #parameters for the model
-from utils.audio_utils import calculate_spectrogram, normalize_audio, read_audio #functions to process audio files
+import params.audio_params as aprs #parameters for audio processing
+import params.model_params as mprs #parameters for the model
+from utils.audio_utils import calculate_spectrogram, preprocess_dataset
 # from modules.wav2spec import Audio2Mel #class to convert audio to mel spectrogram
+import argparse
 
-def preprocess_dataset(dataset_path=params.DATASET_PATH, target_timbre='r2d2', condition_timbre='vn'):
+def prepare_diff_data(tgt_dataset="../datasets/r2d2", cond_dataset="../datasets/vn", sr=aprs.SAMPLE_RATE, n_mel_channels=aprs.N_MEL_CHANNELS, specs_config=False):
     """
-    Preprocess the dataset
-    :param dataset_path: The path to the dataset
-    :param target_timbre: The name of target audio for transfering timbre
-    :param condition_timbre: The name of condition audio for receiving timbre
+    Prepare the dataset from the audio files to mel-spectrograms 
+    and save them to the dataset folder
     """
-    # Get the list of audio files in the dataset
-    target_audios = tf.io.gfile.glob(dataset_path + target_timbre + '/*.wav') #target audios of R2D2
-    condition_audios = tf.io.gfile.glob(dataset_path + condition_timbre + '/*.wav') #condition audios of Violin
+    # Get the list of audio files
+    tgt_specs = preprocess_dataset(tgt_dataset, sr, n_mel_channels)
+    cond_specs = preprocess_dataset(cond_dataset, sr, n_mel_channels)
 
-    # # Initialize the Audio2Mel class
-    # audio2mel = Audio2Mel()
-    
-    # FIXME: CHECK THE SIZE OF THE OUTPUT SPECTROGRAM
-    target_spectrograms = np.zeros((len(target_audios), params.MEL_SPEC_HEIGHT, params.MEL_SPEC_WIDTH, model_params.TGT_IMG_CHANNELS))
-    condition_spectrograms = np.zeros((len(condition_audios), params.MEL_SPEC_HEIGHT, params.MEL_SPEC_WIDTH, model_params.TGT_IMG_CHANNELS))
+    # Convert to Tensorflow Tensors
+    tgt_spectrograms = tf.convert_to_tensor(tgt_specs, dtype=tf.float32)
+    tgt_spectrograms = tf.expand_dims(tgt_spectrograms, axis=-1)
 
-    # Preprocess the target timbre
-    for i, audio_file in enumerate(tqdm(target_audios, desc="Preprocessing target timbre...")):
-        audio = read_audio(audio_file)
-        audio = normalize_audio(audio)
+    cond_spectrograms = tf.convert_to_tensor(cond_specs, dtype=tf.float32)
+    cond_spectrograms = tf.expand_dims(cond_spectrograms, axis=-1)
 
-        # Calculate the spectrogram
-        spectrogram = calculate_spectrogram(audio) #expected original shape (128, 512)
-
-        # Reshape the spectrogram
-        target_spectrograms[i] = spectrogram.reshape(128, 128, 1)
-    
-    # Preprocess the condition timbre
-    for i, audio_file in enumerate(tqdm(condition_audios, desc="Preprocessing condition timbre...")):
-        # Read the audio file
-        audio = read_audio(audio_file)
-        audio = normalize_audio(audio)
-
-        # Calculate the spectrogram
-        spectrogram = calculate_spectrogram(audio)
-        # Reshape the spectrogram
-        condition_spectrograms[i] = spectrogram.reshape(128, 128, 1)
-
-    return target_spectrograms, condition_spectrograms
+    return tgt_spectrograms, cond_spectrograms #expected output shape (number of samples, 128, 128, 1)
 
 
+def main():
+    #TODO: Add parser for the input data to provide
+    # additional configuration for the mel-spectrogram
+    """
+    THIS FILE ONLY USE FOR PREPROCESSING TASK
+    WHICH WILL GENERATE THE DATASET OF MEL-SPECTROGRAMS FROM THE AUDIO FILES
+    AND SAVE THEM TO THE DATASET FOLDER
+    """
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_path', type=str, default='./datasets/' , help='Path to the datasource')
+    parser.add_argument('--tgt_timbre', type=str, default='r2d2' , help='Name of Target timbre')
+    parser.add_argument('--cond_timbre', type=str, default='vn' , help='Name of Conditioning timbre')
+    parser.add_argument('--sr', type=int, default=aprs.SAMPLE_RATE , help='Sample rate')
+    parser.add_argument('--n_mel_channels', type=int, default=aprs.N_MEL_CHANNELS , help='Number of mel channels')
 
+    # parser for the configuration of mel-spectrogram
+    # FIXME - to be considered
+    # parser.add_argument('--n_fft', type=int, default=aprs.N_FFT , help='Number of FFT')
+    # parser.add_argument('--hop_length', type=int, default=aprs.HOP_LENGTH , help='Hop length')
+    # parser.add_argument('--win_length', type=int, default=aprs.WIN_LENGTH , help='Window length')
+    # parser.add_argument('--fmin', type=float, default=aprs.MEL_FMIN , help='Minimum frequency')
+    # parser.add_argument('--fmax', type=float, default=aprs.MEL_FMAX , help='Maximum frequency')
+
+    args = parser.parse_args()
+
+    tgt_dataset = os.path.join(args.data_path, args.tgt_timbre)
+    cond_dataset = os.path.join(args.data_path, args.cond_timbre)
+    tgt_specs, cond_specs = prepare_diff_data(tgt_dataset, cond_dataset, args.sr, args.n_mel_channels)
+
+    # Save the dataset to the dataset folder
+    np.save(os.path.join(args.data_path, args.tgt_timbre, 'tgt_specs.npy'), tgt_specs)
+    np.save(os.path.join(args.data_path, args.cond_timbre, 'cond_specs.npy'), cond_specs)
+
+if __name__ == "__main__":
+    main()
+
+ 

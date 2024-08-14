@@ -22,4 +22,4 @@ MEL_SPEC_HEIGHT = 128 #spec height
 MEL_SPEC_WIDTH = 512 #spec width
 
 MEL_SPEC_ORIGINAL_SIZE = (MEL_SPEC_HEIGHT, MEL_SPEC_WIDTH) # size of the original Mel-Spectrogram
-MEL_SPEC_RESHAPE_SIZE = (128, 128) #size of Mel-Spectrogram that will be used as input to the model
+MEL_SPEC_NORM_SIZE = (128, 128) #size of Mel-Spectrogram that will be used as input to the model
