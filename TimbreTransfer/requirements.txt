@@ -9,5 +9,10 @@ librosa
 essentia
 frechet-audio-distance
 pretty_midi
+resampy
+scikit-learn
 tqdm
 transformers
+torch
+torchaudio
+torchvision
